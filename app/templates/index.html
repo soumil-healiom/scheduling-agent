@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chatbot Demo Interface</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        #chat-container {
+            width: 600px;
+            height: 400px;
+            border: 1px solid #ccc;
+            overflow-y: scroll;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        #user-input {
+            width: 500px;
+        }
+        .message {
+            margin-bottom: 10px;
+        }
+        .system-message {
+            font-style: italic;
+            color: #888;
+        }
+        .typing-indicator {
+            font-style: italic;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <h1>Healiom Demo</h1>
+    <div>
+        <h2>Upload configuration json</h2>
+        <textarea id="config-input" rows="10" cols="50"></textarea>
+        <button onclick="uploadConfig()">Upload Configuration</button>
+    </div>
+    <div id="chat-container"></div>
+    <div id="typing-indicator" class="typing-indicator" style="display: none;">Bot is typing...</div>
+    <input type="text" id="user-input" placeholder="Type your message...">
+    <button onclick="sendMessage()">Send</button>
+
+    <script>
+        const socket = io();
+        const chatContainer = document.getElementById('chat-container');
+        const userInput = document.getElementById('user-input');
+        const typingIndicator = document.getElementById('typing-indicator');
+
+        // socket.on('connect', function() {
+        //     console.log('Connected to server');
+        //     appendMessage('System', 'Connected to server');
+        // });
+
+        function uploadConfig() {
+            console.log('Uploading configuration');
+            const configInput = document.getElementById('config-input');
+            let config;
+            try {
+                config = JSON.parse(configInput.value);
+            } catch (error) {
+                alert('Invalid JSON. Please check your configuration.');
+                return;
+            }
+            fetch('/upload', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({config: config}),
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Configuration uploaded:', data.message);
+                alert(data.message);
+                socket.emit('start_chat');
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+                alert('Error uploading configuration');
+            });
+        }
+
+        function sendMessage() {
+            const message = userInput.value;
+            if (message.trim() !== '') {
+                console.log('Sending user message:', message);
+                socket.emit('user_message', message);
+                appendMessage('You', message);
+                userInput.value = '';
+                typingIndicator.style.display = 'block';
+            }
+        }
+
+        function appendMessage(sender, message) {
+            console.log('Appending message:', sender, message);
+            const messageElement = document.createElement('div');
+            messageElement.className = 'message';
+            
+            if (sender === 'System') {
+                messageElement.className += ' system-message';
+                messageElement.textContent = message;
+            } else {
+                messageElement.innerHTML = `<strong>${sender}:</strong> ${message.replace(/\n/g, '<br>')}`;
+            }
+            
+            chatContainer.appendChild(messageElement);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        socket.on('message', function(data) {
+            console.log('Received message:', data);
+            typingIndicator.style.display = 'none';
+            appendMessage(data.sender === 'bot' ? 'Bot' : (data.sender === 'system' ? 'System' : 'You'), data.message);
+        });
+
+        userInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>
